@@ -1,12 +1,12 @@
 use crate::audio::samples_to_bytes;
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 // SONIOX real-time WebSocket endpoint (docs: /stt/api-reference/websocket-api)
 const SONIOX_WS_URL: &str = "wss://stt-rt.soniox.com/transcribe-websocket";
@@ -50,7 +50,7 @@ struct TranscriptionEvent {
 
 #[derive(Clone, Serialize)]
 struct AudioLevelEvent {
-    level: f32,  // 0.0 to 1.0
+    level: f32, // 0.0 to 1.0
 }
 
 // Audio data with level
@@ -66,9 +66,7 @@ fn calculate_audio_level(samples: &[i16]) -> f32 {
     }
 
     // Calculate RMS
-    let sum_squares: f64 = samples.iter()
-        .map(|&s| (s as f64).powi(2))
-        .sum();
+    let sum_squares: f64 = samples.iter().map(|&s| (s as f64).powi(2)).sum();
     let rms = (sum_squares / samples.len() as f64).sqrt();
 
     // Normalize to 0-1 range (32767 is max for i16)
@@ -108,7 +106,10 @@ pub async fn start_transcription(
         .await
         .map_err(|e| format!("Failed to send config: {}", e))?;
 
-    println!("Sent SONIOX configuration (model={}, format={})", SONIOX_MODEL, "pcm_s16le");
+    println!(
+        "Sent SONIOX configuration (model={}, format={})",
+        SONIOX_MODEL, "pcm_s16le"
+    );
 
     // Send a small silence frame to avoid first-audio timeouts.
     let priming_silence = vec![0i16; 1600];
@@ -146,7 +147,10 @@ pub async fn start_transcription(
 
         let sample_rate = supported_config.sample_rate().0;
         let channels = supported_config.channels();
-        println!("Using audio config: {} Hz, {} channels", sample_rate, channels);
+        println!(
+            "Using audio config: {} Hz, {} channels",
+            sample_rate, channels
+        );
 
         let config = cpal::StreamConfig {
             channels,
@@ -157,43 +161,45 @@ pub async fn start_transcription(
         let tx = audio_tx;
         let resample_ratio = sample_rate as f32 / 16000.0;
 
-        let stream = device
-            .build_input_stream(
-                &config,
-                move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                    // Convert to mono if stereo
-                    let mono_data: Vec<f32> = if channels > 1 {
-                        data.chunks(channels as usize)
-                            .map(|chunk| chunk.iter().sum::<f32>() / channels as f32)
-                            .collect()
-                    } else {
-                        data.to_vec()
-                    };
+        let stream = device.build_input_stream(
+            &config,
+            move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                // Convert to mono if stereo
+                let mono_data: Vec<f32> = if channels > 1 {
+                    data.chunks(channels as usize)
+                        .map(|chunk| chunk.iter().sum::<f32>() / channels as f32)
+                        .collect()
+                } else {
+                    data.to_vec()
+                };
 
-                    // Simple resampling: take every Nth sample to downsample to 16kHz
-                    let resampled: Vec<i16> = mono_data
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(i, &sample)| {
-                            let target_idx = (i as f32 / resample_ratio) as usize;
-                            let current_idx = ((i as f32 - 1.0).max(0.0) / resample_ratio) as usize;
-                            if target_idx != current_idx || i == 0 {
-                                let clamped = sample.clamp(-1.0, 1.0);
-                                Some((clamped * 32767.0) as i16)
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
+                // Simple resampling: take every Nth sample to downsample to 16kHz
+                let resampled: Vec<i16> = mono_data
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, &sample)| {
+                        let target_idx = (i as f32 / resample_ratio) as usize;
+                        let current_idx = ((i as f32 - 1.0).max(0.0) / resample_ratio) as usize;
+                        if target_idx != current_idx || i == 0 {
+                            let clamped = sample.clamp(-1.0, 1.0);
+                            Some((clamped * 32767.0) as i16)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
 
-                    if !resampled.is_empty() {
-                        let level = calculate_audio_level(&resampled);
-                        let _ = tx.try_send(AudioChunk { samples: resampled, level });
-                    }
-                },
-                |err| eprintln!("Audio stream error: {}", err),
-                None,
-            );
+                if !resampled.is_empty() {
+                    let level = calculate_audio_level(&resampled);
+                    let _ = tx.try_send(AudioChunk {
+                        samples: resampled,
+                        level,
+                    });
+                }
+            },
+            |err| eprintln!("Audio stream error: {}", err),
+            None,
+        );
 
         match stream {
             Ok(s) => {
@@ -271,7 +277,6 @@ pub async fn start_transcription(
                                 *transcription_clone.lock().await = display_text.clone();
 
                                 // Emit for popup display (full transcription)
-                                println!("Emitting transcription: {}", display_text);
                                 let _ = app_clone.emit(
                                     "transcription",
                                     TranscriptionEvent {
@@ -314,7 +319,6 @@ pub async fn start_transcription(
     let app_for_audio = app.clone();
 
     let mut sent_audio_frame = false;
-    let mut stopped_by_flag = false;
     let mut level_emit_counter = 0u32;
 
     while *is_recording_send.lock().await {
@@ -329,7 +333,6 @@ pub async fn start_transcription(
                 // Emit audio level every few chunks to avoid flooding
                 level_emit_counter += 1;
                 if level_emit_counter % 2 == 0 {
-                    println!("Emitting audio level: {}", chunk.level);
                     let _ = app_for_audio.emit("audio-level", AudioLevelEvent { level: chunk.level });
                 }
 
@@ -345,11 +348,7 @@ pub async fn start_transcription(
             }
         }
     }
-    stopped_by_flag = true;
-
-    if stopped_by_flag {
-        println!("Recording flag set to false; stopping audio send");
-    }
+    println!("Recording flag set to false; stopping audio send");
 
     // Stop the audio capture thread
     audio_recording_flag.store(false, Ordering::Relaxed);
