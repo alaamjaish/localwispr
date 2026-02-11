@@ -19,6 +19,7 @@ tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
 futures-util = "0.3"
 cpal = "0.15"
 enigo = { version = "0.2", features = ["serde"] }
+arboard = "3.4"
 url = "2"
 base64 = "0.22"
 

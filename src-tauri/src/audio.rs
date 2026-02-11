@@ -1,5 +1,4 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use std::sync::Arc;
 use tokio::sync::mpsc;
 
 pub struct AudioCapture {
@@ -55,7 +54,9 @@ impl AudioCapture {
             )
             .map_err(|e| format!("Failed to build input stream: {}", e))?;
 
-        stream.play().map_err(|e| format!("Failed to start stream: {}", e))?;
+        stream
+            .play()
+            .map_err(|e| format!("Failed to start stream: {}", e))?;
 
         self.stream = Some(stream);
 
