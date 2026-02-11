@@ -48,6 +48,35 @@ struct TranscriptionEvent {
     is_final: bool,
 }
 
+#[derive(Clone, Serialize)]
+struct AudioLevelEvent {
+    level: f32,  // 0.0 to 1.0
+}
+
+// Audio data with level
+struct AudioChunk {
+    samples: Vec<i16>,
+    level: f32,
+}
+
+/// Calculate RMS audio level from samples (returns 0.0 to 1.0)
+fn calculate_audio_level(samples: &[i16]) -> f32 {
+    if samples.is_empty() {
+        return 0.0;
+    }
+
+    // Calculate RMS
+    let sum_squares: f64 = samples.iter()
+        .map(|&s| (s as f64).powi(2))
+        .sum();
+    let rms = (sum_squares / samples.len() as f64).sqrt();
+
+    // Normalize to 0-1 range (32767 is max for i16)
+    // Apply some scaling to make it more sensitive
+    let normalized = (rms / 32767.0) * 4.0;
+    normalized.min(1.0) as f32
+}
+
 /// Start transcription with SONIOX
 pub async fn start_transcription(
     app: AppHandle,
@@ -88,8 +117,8 @@ pub async fn start_transcription(
         .await
         .map_err(|e| format!("Failed to send priming audio: {}", e))?;
 
-    // Create channel for audio samples
-    let (audio_tx, mut audio_rx) = tokio::sync::mpsc::channel::<Vec<i16>>(100);
+    // Create channel for audio samples with level
+    let (audio_tx, mut audio_rx) = tokio::sync::mpsc::channel::<AudioChunk>(100);
 
     // Use AtomicBool for thread-safe recording state check (std::thread can't use tokio runtime)
     let audio_recording_flag = Arc::new(AtomicBool::new(true));
@@ -158,7 +187,8 @@ pub async fn start_transcription(
                         .collect();
 
                     if !resampled.is_empty() {
-                        let _ = tx.try_send(resampled);
+                        let level = calculate_audio_level(&resampled);
+                        let _ = tx.try_send(AudioChunk { samples: resampled, level });
                     }
                 },
                 |err| eprintln!("Audio stream error: {}", err),
@@ -279,21 +309,30 @@ pub async fn start_transcription(
         full_text
     });
 
-    // Send audio data
+    // Send audio data and emit audio levels
     let is_recording_send = is_recording.clone();
+    let app_for_audio = app.clone();
 
     let mut sent_audio_frame = false;
-
     let mut stopped_by_flag = false;
+    let mut level_emit_counter = 0u32;
 
     while *is_recording_send.lock().await {
         tokio::select! {
-            Some(samples) = audio_rx.recv() => {
-                let bytes = samples_to_bytes(&samples);
+            Some(chunk) = audio_rx.recv() => {
+                let bytes = samples_to_bytes(&chunk.samples);
                 if let Err(e) = write.send(Message::Binary(bytes)).await {
                     eprintln!("Failed to send audio: {}", e);
                     break;
                 }
+
+                // Emit audio level every few chunks to avoid flooding
+                level_emit_counter += 1;
+                if level_emit_counter % 2 == 0 {
+                    println!("Emitting audio level: {}", chunk.level);
+                    let _ = app_for_audio.emit("audio-level", AudioLevelEvent { level: chunk.level });
+                }
+
                 if !sent_audio_frame {
                     sent_audio_frame = true;
                     println!("Sent first audio frame");

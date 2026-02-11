@@ -14,8 +14,8 @@
     "windows": [
       {
         "title": "LocalWispr",
-        "width": 400,
-        "height": 200,
+        "width": 450,
+        "height": 340,
         "resizable": false,
         "center": true,
         "visible": false,

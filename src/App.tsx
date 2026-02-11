@@ -13,11 +13,16 @@ interface RecordingStateEvent {
   is_recording: boolean;
 }
 
+interface AudioLevelEvent {
+  level: number;
+}
+
 function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [transcription, setTranscription] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [apiKeySet, setApiKeySet] = useState(false);
+  const [audioLevel, setAudioLevel] = useState(0);
   const lastRecordingStartRef = useRef<number>(0);
   const transcriptionRef = useRef<string>("");
   const lastTypedTextRef = useRef<string>(""); // Track what we've already typed
@@ -174,6 +179,12 @@ function App() {
       );
     });
 
+    // Listen for audio level updates
+    const unlistenAudioLevel = listen<AudioLevelEvent>("audio-level", (event) => {
+      console.log("Audio level received:", event.payload.level);
+      setAudioLevel(event.payload.level);
+    });
+
     // Handle finish-and-type event (shortcut pressed while recording)
     const unlistenFinishAndType = listen("finish-and-type", async () => {
       const currentText = transcriptionRef.current;
@@ -210,6 +221,7 @@ function App() {
       unlistenLiveType.then((f) => f());
       unlistenStartRequest.then((f) => f());
       unlistenStopRequest.then((f) => f());
+      unlistenAudioLevel.then((f) => f());
       unlistenFinishAndType.then((f) => f());
     };
   }, [startRecording, stopRecording, completeTranscription, transcription]);
@@ -251,6 +263,7 @@ function App() {
       isRecording={isRecording}
       transcription={transcription}
       error={error}
+      audioLevel={audioLevel}
       onStart={startRecording}
       onStop={() => stopRecording("ui:done").then(() => completeTranscription())}
       onCancel={() => {
