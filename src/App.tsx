@@ -196,8 +196,12 @@ function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        stopRecording("ui:escape").then(() => invoke("hide_window"));
+        void invoke("cancel_and_hide", { reason: "ui:escape" }).catch((e) =>
+          setError(String(e))
+        );
         setTranscription("");
+        transcriptionRef.current = "";
+        lastTypedTextRef.current = "";
       } else if (e.key === "Enter" && e.ctrlKey && !e.shiftKey) {
         if (!isRecording) {
           return;
@@ -231,7 +235,9 @@ function App() {
       onStart={startRecording}
       onStop={() => stopRecording("ui:done").then(() => completeTranscription())}
       onCancel={() => {
-        stopRecording("ui:cancel").then(() => invoke("hide_window"));
+        void invoke("cancel_and_hide", { reason: "ui:cancel" }).catch((e) =>
+          setError(String(e))
+        );
         setTranscription("");
         transcriptionRef.current = "";
         lastTypedTextRef.current = "";

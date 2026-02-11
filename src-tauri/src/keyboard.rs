@@ -49,20 +49,33 @@ fn paste_via_clipboard(text: &str) -> Result<(), String> {
     #[cfg(not(target_os = "macos"))]
     let modifier = Key::Control;
 
+    #[cfg(target_os = "windows")]
+    let paste_key = Key::V;
+    #[cfg(not(target_os = "windows"))]
+    let paste_key = Key::Unicode('v');
+
     enigo
         .key(modifier, Direction::Press)
         .map_err(|e| format!("Failed to press modifier key: {}", e))?;
     enigo
-        .key(Key::Unicode('v'), Direction::Click)
+        .key(paste_key, Direction::Click)
         .map_err(|e| format!("Failed to trigger paste shortcut: {}", e))?;
     enigo
         .key(modifier, Direction::Release)
         .map_err(|e| format!("Failed to release modifier key: {}", e))?;
 
-    // Give target app a moment to consume paste before clipboard restore.
-    thread::sleep(Duration::from_millis(80));
+    // Give target app a moment to consume paste.
+    thread::sleep(Duration::from_millis(120));
+
+    // Restore clipboard text in background after a longer delay to avoid
+    // racing the target app's paste handling.
     if let Some(old) = previous_text {
-        let _ = clipboard.set_text(old);
+        std::thread::spawn(move || {
+            thread::sleep(Duration::from_millis(1200));
+            if let Ok(mut cb) = Clipboard::new() {
+                let _ = cb.set_text(old);
+            }
+        });
     }
 
     Ok(())

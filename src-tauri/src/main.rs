@@ -109,16 +109,6 @@ async fn stop_recording(
         return Ok(());
     }
 
-    let now = now_millis();
-    let last_start = state.last_start_ms.load(Ordering::Relaxed);
-    let elapsed = now.saturating_sub(last_start);
-    if last_start != 0 && elapsed < 250 {
-        println!(
-            "stop_recording ignored; too soon after start ({}ms)",
-            elapsed
-        );
-        return Ok(());
-    }
     *is_recording = false;
 
     app.emit(
@@ -128,6 +118,36 @@ async fn stop_recording(
         },
     )
     .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+// Command to force stop and hide popup immediately (used by Cancel/Escape).
+#[tauri::command]
+async fn cancel_and_hide(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    reason: Option<String>,
+) -> Result<(), String> {
+    let reason = reason.unwrap_or_else(|| "ui:force-cancel".to_string());
+    println!("cancel_and_hide invoked (reason={})", reason);
+
+    *state.is_recording.lock().await = false;
+    *state.latest_transcription.lock().await = String::new();
+    state.last_start_ms.store(0, Ordering::Relaxed);
+
+    let _ = app.emit(
+        "recording-state",
+        RecordingStateEvent {
+            is_recording: false,
+        },
+    );
+    let _ = app.emit("finish-and-type", ());
+
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_focusable(true);
+        window.hide().map_err(|e| e.to_string())?;
+    }
 
     Ok(())
 }
@@ -163,6 +183,7 @@ async fn get_recording_state(state: State<'_, AppState>) -> Result<bool, String>
 #[tauri::command]
 async fn show_window(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_focusable(true);
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
     }
@@ -173,6 +194,7 @@ async fn show_window(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 async fn hide_window(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_focusable(true);
         window.hide().map_err(|e| e.to_string())?;
     }
     Ok(())
@@ -212,6 +234,7 @@ fn main() {
                     {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.set_focusable(true);
                             let _ = window.show();
                             let _ = window.set_focus();
                         }
@@ -267,17 +290,6 @@ fn main() {
                             println!("Shortcut pressed, is_recording: {}", is_recording);
 
                             if is_recording {
-                                // Check if at least 1 second has passed since recording started
-                                let last_start = state.last_start_ms.load(Ordering::Relaxed);
-                                let elapsed = now_millis().saturating_sub(last_start);
-                                if elapsed < 300 {
-                                    println!(
-                                        "Shortcut ignored; recording just started ({}ms ago)",
-                                        elapsed
-                                    );
-                                    return;
-                                }
-
                                 // Stop recording
                                 println!("Stopping recording...");
                                 *state.is_recording.lock().await = false;
@@ -294,6 +306,7 @@ fn main() {
 
                                 // Hide window first
                                 if let Some(window) = app.get_webview_window("main") {
+                                    let _ = window.set_focusable(true);
                                     let _ = window.hide();
                                 }
 
@@ -305,8 +318,8 @@ fn main() {
 
                                 // Type the text directly from Rust
                                 if !text.trim().is_empty() {
-                                    // Wait for focus to return to original app
-                                    tokio::time::sleep(tokio::time::Duration::from_millis(80))
+                                    // Let user release Alt/Shift/O and OS restore focus.
+                                    tokio::time::sleep(tokio::time::Duration::from_millis(280))
                                         .await;
 
                                     match keyboard::type_text(text.trim()) {
@@ -324,6 +337,7 @@ fn main() {
                                     // Show window for API key setup
                                     println!("No API key, showing setup window");
                                     if let Some(window) = app.get_webview_window("main") {
+                                        let _ = window.set_focusable(true);
                                         let _ = window.show();
                                         let _ = window.set_focus();
                                     }
@@ -332,8 +346,8 @@ fn main() {
 
                                 // Show a small popup while recording (don't steal focus!)
                                 if let Some(window) = app.get_webview_window("main") {
+                                    let _ = window.set_focusable(false);
                                     let _ = window.show();
-                                    // Do NOT call set_focus() - keep focus on original app
                                 }
 
                                 *state.is_recording.lock().await = true;
@@ -381,6 +395,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             start_recording,
             stop_recording,
+            cancel_and_hide,
             type_text,
             set_api_key,
             get_recording_state,
