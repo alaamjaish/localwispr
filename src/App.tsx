@@ -232,8 +232,6 @@ function App() {
       transcription={transcription}
       error={error}
       audioLevel={audioLevel}
-      onStart={startRecording}
-      onStop={() => stopRecording("ui:done").then(() => completeTranscription())}
       onCancel={() => {
         void invoke("cancel_and_hide", { reason: "ui:cancel" }).catch((e) =>
           setError(String(e))

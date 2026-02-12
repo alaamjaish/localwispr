@@ -6,8 +6,6 @@ interface RecordingPopupProps {
   transcription: string;
   error: string | null;
   audioLevel: number;
-  onStart: () => void;
-  onStop: () => void;
   onCancel: () => void;
 }
 
@@ -38,8 +36,6 @@ function RecordingPopup({
   transcription,
   error,
   audioLevel,
-  onStart,
-  onStop,
   onCancel,
 }: RecordingPopupProps) {
   const textRef = useRef<HTMLDivElement>(null);
@@ -78,12 +74,12 @@ function RecordingPopup({
 
   // Get dynamic status text
   const getStatusText = () => {
-    if (!isRecording) return "Ready to record";
+    if (!isRecording) return "جاهز للتسجيل";
     const dots = ".".repeat(statusPhase);
     if (transcription) {
-      return `Transcribing${dots}`;
+      return `جاري التفريغ${dots}`;
     }
-    return `Listening${dots}`;
+    return `جاري الاستماع${dots}`;
   };
 
   return (
@@ -100,7 +96,7 @@ function RecordingPopup({
           </div>
           <span className="status-text">{getStatusText()}</span>
         </div>
-        <button className="close-btn" onClick={onCancel} title="Cancel (Esc)">
+        <button className="close-btn" onClick={onCancel} title="إلغاء (Esc)">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M1 1L13 13M1 13L13 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
@@ -138,48 +134,17 @@ function RecordingPopup({
           ) : (
             <div className="placeholder">
               {isRecording ? (
-                <span className="listening-text">Speak now...</span>
+                <span className="listening-text">تحدث الآن...</span>
               ) : (
                 <>
                   <div className="shortcut-hint">
                     <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>O</kbd>
                   </div>
-                  <span className="hint-text">Press shortcut or click below to start</span>
                 </>
               )}
             </div>
           )}
         </div>
-      </div>
-
-      {/* Footer with action buttons */}
-      <div className="popup-footer">
-        <button className="btn btn-secondary" onClick={onCancel}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
-          </svg>
-          Cancel
-        </button>
-        {isRecording ? (
-          <button
-            className="btn btn-primary"
-            onClick={onStop}
-            disabled={!transcription.trim()}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Done
-          </button>
-        ) : (
-          <button className="btn btn-primary" onClick={onStart}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-            </svg>
-            Start Recording
-          </button>
-        )}
       </div>
     </div>
   );

@@ -212,7 +212,7 @@ fn main() {
         })
         .setup(|app| {
             // Create system tray menu
-            let quit = MenuItem::with_id(app, "quit", "Quit LocalWispr", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "إغلاق الناسخ المحلي", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&quit])?;
 
             // Create tray icon

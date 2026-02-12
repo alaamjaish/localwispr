@@ -12,7 +12,7 @@ function ApiKeySetup({ onSubmit }: ApiKeySetupProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!apiKey.trim()) {
-      setError("Please enter your SONIOX API key");
+      setError("يرجى إدخال مفتاح SONIOX");
       return;
     }
     onSubmit(apiKey.trim());
@@ -21,12 +21,12 @@ function ApiKeySetup({ onSubmit }: ApiKeySetupProps) {
   return (
     <div className="popup-container setup" data-tauri-drag-region>
       <div className="popup-header">
-        <h2 className="setup-title">Welcome to LocalWispr</h2>
+        <h2 className="setup-title">مرحبًا بك في الناسخ المحلي</h2>
       </div>
 
       <form className="setup-form" onSubmit={handleSubmit}>
         <p className="setup-description">
-          Enter your SONIOX API key to get started.
+          أدخل مفتاح SONIOX للبدء.
           <br />
           <a
             href="https://soniox.com"
@@ -34,14 +34,14 @@ function ApiKeySetup({ onSubmit }: ApiKeySetupProps) {
             rel="noopener noreferrer"
             className="link"
           >
-            Get your API key at soniox.com
+            احصل على المفتاح من soniox.com
           </a>
         </p>
 
         <input
           type="password"
           className="api-input"
-          placeholder="Enter your SONIOX API key"
+          placeholder="أدخل مفتاح SONIOX"
           value={apiKey}
           onChange={(e) => {
             setApiKey(e.target.value);
@@ -53,7 +53,7 @@ function ApiKeySetup({ onSubmit }: ApiKeySetupProps) {
         {error && <div className="error-message small">{error}</div>}
 
         <button type="submit" className="action-btn done full-width">
-          Save & Continue
+          حفظ ومتابعة
         </button>
       </form>
     </div>
