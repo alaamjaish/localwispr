@@ -7,7 +7,8 @@ $bitmaps = @()
 foreach ($size in $sizes) {
     $bmp = New-Object System.Drawing.Bitmap($size, $size)
     $g = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.Clear([System.Drawing.Color]::FromArgb(139, 92, 246))
+    # Blue background
+    $g.Clear([System.Drawing.Color]::FromArgb(37, 99, 235))
     $g.SmoothingMode = 'AntiAlias'
     $brush = [System.Drawing.Brushes]::White
     $fontSize = [int]($size * 0.5)

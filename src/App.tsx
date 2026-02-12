@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import RecordingPopup from "./components/RecordingPopup";
 import ApiKeySetup from "./components/ApiKeySetup";
 
@@ -18,6 +19,7 @@ interface AudioLevelEvent {
 }
 
 function App() {
+  const appWindow = getCurrentWindow();
   const [isRecording, setIsRecording] = useState(false);
   const [transcription, setTranscription] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +28,7 @@ function App() {
   const lastRecordingStartRef = useRef<number>(0);
   const transcriptionRef = useRef<string>("");
   const lastTypedTextRef = useRef<string>(""); // Track what we've already typed
+  const lastWindowSizeRef = useRef<{ width: number; height: number } | null>(null);
 
   // Handle starting recording
   const startRecording = useCallback(async () => {
@@ -191,6 +194,48 @@ function App() {
       unlistenFinishAndType.then((f) => f());
     };
   }, [startRecording, stopRecording, completeTranscription]);
+
+  // Remove outer glass shell around the popup and keep the window tight to content.
+  useEffect(() => {
+    void appWindow.setShadow(false).catch(() => {
+      // Some environments may not support shadow control.
+    });
+  }, [appWindow]);
+
+  useEffect(() => {
+    const fitWindowToPopup = async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const popup = document.querySelector(".popup-container") as HTMLElement | null;
+      if (!popup) {
+        return;
+      }
+
+      const rect = popup.getBoundingClientRect();
+      const width = Math.ceil(rect.width);
+      const height = Math.ceil(rect.height);
+      if (width <= 0 || height <= 0) {
+        return;
+      }
+
+      const last = lastWindowSizeRef.current;
+      if (last && last.width === width && last.height === height) {
+        return;
+      }
+
+      lastWindowSizeRef.current = { width, height };
+      try {
+        // Some platforms reject setSize when window is non-resizable.
+        await appWindow.setResizable(true);
+        await appWindow.setSize(new LogicalSize(width, height));
+      } catch (e) {
+        console.warn("Failed to fit popup window size", e);
+      } finally {
+        await appWindow.setResizable(false).catch(() => {});
+      }
+    };
+
+    void fitWindowToPopup();
+  }, [appWindow, apiKeySet, isRecording, transcription, error]);
 
   // Keyboard shortcuts
   useEffect(() => {

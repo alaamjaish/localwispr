@@ -20,6 +20,11 @@
 
 .popup-container.recording-active {
   border-color: rgba(34, 211, 238, 0.45);
+  box-shadow:
+    0 28px 44px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 calc(12px + var(--voice-intensity, 0) * 44px)
+      rgba(34, 211, 238, calc(0.16 + var(--voice-intensity, 0) * 0.34));
 }
 
 .border-glow {
@@ -135,31 +140,101 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 48px;
+  height: 74px;
   margin-bottom: 16px;
   border-radius: 12px;
   background: rgba(17, 24, 39, 0.6);
   border: 1px solid rgba(148, 163, 184, 0.14);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.07s linear, box-shadow 0.08s ease-out;
 }
 
 .visualizer.active {
-  border-color: rgba(34, 211, 238, 0.3);
-  background: rgba(20, 30, 40, 0.8);
+  border-color: rgba(34, 211, 238, 0.5);
+  background: rgba(20, 30, 40, 0.9);
+}
+
+.voice-orb {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle,
+      rgba(103, 232, 249, 0.6) 0%,
+      rgba(34, 211, 238, 0.34) 32%,
+      rgba(14, 165, 183, 0) 70%
+    );
+  filter: blur(9px);
+  pointer-events: none;
+  transition: transform 0.1s ease-out, opacity 0.1s ease-out;
+}
+
+.voice-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 90px;
+  height: 90px;
+  transform: translate(-50%, -50%) scale(0.8);
+  border-radius: 50%;
+  border: 2px solid rgba(103, 232, 249, 0.5);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.visualizer.active .voice-ring {
+  animation: ringBlast 1.12s ease-out infinite;
+}
+
+.visualizer.active .voice-ring.ring-b {
+  animation-delay: 0.42s;
+}
+
+@keyframes ringBlast {
+  0% {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0.64;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.65);
+    opacity: 0;
+  }
 }
 
 .wave-bars {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 6px;
   height: 100%;
+  position: relative;
+  z-index: 1;
 }
 
 .wave-bar {
-  width: 4px;
+  width: 6px;
   min-height: 8px;
-  border-radius: 2px;
-  background: linear-gradient(180deg, #67e8f9, #0ea5b7);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, #c5fbff, #67e8f9 40%, #22d3ee 65%, #0ea5b7);
+  box-shadow: 0 0 9px rgba(103, 232, 249, 0.45);
+  transform-origin: center bottom;
+  animation: barBob 0.46s cubic-bezier(0.32, 0.02, 0.27, 1) infinite;
+  animation-delay: var(--bar-delay, 0ms);
+}
+
+.visualizer:not(.active) .wave-bar {
+  animation: none;
+}
+
+@keyframes barBob {
+  0%, 100% { transform: scaleY(0.86); }
+  50% { transform: scaleY(1.34); }
 }
 
 .transcription-area {

@@ -12,8 +12,8 @@ foreach ($size in $iconSizes) {
     $g.SmoothingMode = 'AntiAlias'
     $g.InterpolationMode = 'HighQualityBicubic'
 
-    # Purple background
-    $g.Clear([System.Drawing.Color]::FromArgb(139, 92, 246))
+    # Blue background
+    $g.Clear([System.Drawing.Color]::FromArgb(37, 99, 235))
 
     # White "W" text
     $brush = [System.Drawing.Brushes]::White

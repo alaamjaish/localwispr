@@ -9,23 +9,31 @@ interface RecordingPopupProps {
   onCancel: () => void;
 }
 
-// Generate random-ish but smooth bar heights based on audio level
-function generateBarHeights(audioLevel: number, barCount: number): number[] {
+const BAR_COUNT = 20;
+
+// Generate smooth reactive heights based on mic level with subtle idle motion.
+function generateBarHeights(
+  audioLevel: number,
+  barCount: number,
+  phase: number
+): number[] {
   const heights: number[] = [];
-  const baseHeight = 8;
-  const maxAdditional = 32;
+  const baseHeight = 9;
+  const maxAdditional = 78;
+  const boostedLevel = Math.min(1, Math.pow(Math.max(audioLevel, 0), 0.35) * 1.95);
+  const idleFloor = 0.2 + 0.1 * Math.sin(phase * 0.9);
+  const effectiveLevel = Math.max(boostedLevel, idleFloor);
 
   for (let i = 0; i < barCount; i++) {
-    // Create a wave pattern - middle bars are taller
+    // Wave profile makes middle bars more expressive.
     const position = i / (barCount - 1);
-    const waveMultiplier = Math.sin(position * Math.PI);
-
-    // Add some variation based on position
-    const variation = 0.7 + Math.sin(i * 1.5 + Date.now() / 200) * 0.3;
-
-    // Calculate height based on audio level
-    const additionalHeight = audioLevel * maxAdditional * waveMultiplier * variation;
-    heights.push(baseHeight + additionalHeight);
+    const waveMultiplier = Math.pow(Math.sin(position * Math.PI), 0.75);
+    const drift = 0.7 + Math.sin(phase * 1.95 + i * 0.85) * 0.3;
+    const flutter = 0.82 + Math.sin(phase * 2.8 + i * 1.25) * 0.18;
+    const burst = 1 + boostedLevel * (0.32 + Math.sin(phase * 4.4 + i * 0.38) * 0.22);
+    const additionalHeight =
+      effectiveLevel * maxAdditional * waveMultiplier * drift * flutter * burst;
+    heights.push(baseHeight + Math.max(0, additionalHeight));
   }
 
   return heights;
@@ -40,7 +48,16 @@ function RecordingPopup({
 }: RecordingPopupProps) {
   const textRef = useRef<HTMLDivElement>(null);
   const [statusPhase, setStatusPhase] = useState(0);
-  const [barHeights, setBarHeights] = useState<number[]>(Array(12).fill(8));
+  const [barHeights, setBarHeights] = useState<number[]>(Array(BAR_COUNT).fill(10));
+  const [visualizerEnergy, setVisualizerEnergy] = useState(0);
+  const [shakeOffset, setShakeOffset] = useState({ x: 0, y: 0 });
+  const audioLevelRef = useRef(audioLevel);
+  const smoothedLevelRef = useRef(0);
+  const phaseRef = useRef(0);
+
+  useEffect(() => {
+    audioLevelRef.current = audioLevel;
+  }, [audioLevel]);
 
   // Auto-scroll to bottom as text comes in
   useEffect(() => {
@@ -58,19 +75,37 @@ function RecordingPopup({
     return () => clearInterval(interval);
   }, [isRecording]);
 
-  // Update bar heights based on audio level
+  // Run one continuous visualizer loop while recording.
   useEffect(() => {
     if (!isRecording) {
-      setBarHeights(Array(12).fill(8));
+      setBarHeights(Array(BAR_COUNT).fill(10));
+      setVisualizerEnergy(0);
+      setShakeOffset({ x: 0, y: 0 });
+      smoothedLevelRef.current = 0;
+      phaseRef.current = 0;
       return;
     }
 
     const interval = setInterval(() => {
-      setBarHeights(generateBarHeights(audioLevel, 12));
-    }, 50); // Update at 20fps for smooth animation
+      const current = smoothedLevelRef.current;
+      const target = Math.max(0, audioLevelRef.current);
+      const alpha = target > current ? 0.35 : 0.12;
+      smoothedLevelRef.current = current + (target - current) * alpha;
+      phaseRef.current += 0.22 + smoothedLevelRef.current * 0.24;
+
+      const energy = Math.max(smoothedLevelRef.current, 0.14);
+      setBarHeights(generateBarHeights(smoothedLevelRef.current, BAR_COUNT, phaseRef.current));
+      setVisualizerEnergy(energy);
+
+      const shakeMagnitude = Math.max(0, energy * 7 - 0.7);
+      setShakeOffset({
+        x: Math.sin(phaseRef.current * 13.2) * shakeMagnitude,
+        y: Math.cos(phaseRef.current * 17.1) * shakeMagnitude * 0.75,
+      });
+    }, 33);
 
     return () => clearInterval(interval);
-  }, [isRecording, audioLevel]);
+  }, [isRecording]);
 
   // Get dynamic status text
   const getStatusText = () => {
@@ -83,7 +118,10 @@ function RecordingPopup({
   };
 
   return (
-    <div className={`popup-container ${isRecording ? "recording-active" : ""}`}>
+    <div
+      className={`popup-container ${isRecording ? "recording-active" : ""}`}
+      style={{ ["--voice-intensity" as string]: visualizerEnergy.toFixed(3) }}
+    >
       {/* Animated border gradient */}
       <div className={`border-glow ${isRecording ? "active" : ""}`} />
 
@@ -106,15 +144,40 @@ function RecordingPopup({
       {/* Main content area */}
       <div className="popup-body">
         {/* Waveform visualizer - reactive to audio */}
-        <div className={`visualizer ${isRecording ? "active" : ""}`}>
+        <div
+          className={`visualizer ${isRecording ? "active" : ""}`}
+          style={{
+            transform: isRecording
+              ? `translate(${shakeOffset.x.toFixed(2)}px, ${shakeOffset.y.toFixed(2)}px) scale(${(
+                  1 +
+                  visualizerEnergy * 0.16
+                ).toFixed(3)})`
+              : "translate(0px, 0px) scale(1)",
+            boxShadow: isRecording
+              ? `0 0 ${14 + visualizerEnergy * 34}px rgba(34, 211, 238, ${
+                  0.16 + visualizerEnergy * 0.36
+                })`
+              : "none",
+          }}
+        >
+          <div
+            className="voice-orb"
+            style={{
+              transform: `translate(-50%, -50%) scale(${1 + visualizerEnergy * 1.15})`,
+              opacity: isRecording ? 0.22 + visualizerEnergy * 0.56 : 0.08,
+            }}
+          />
+          <div className="voice-ring ring-a" />
+          <div className="voice-ring ring-b" />
           <div className="wave-bars">
             {barHeights.map((height, i) => (
               <div
                 key={i}
                 className="wave-bar"
                 style={{
+                  ["--bar-delay" as string]: `${i * 60}ms`,
                   height: `${height}px`,
-                  opacity: isRecording ? 0.5 + (height / 40) * 0.5 : 0.3,
+                  opacity: isRecording ? 0.52 + (height / 86) * 0.48 : 0.3,
                   transition: "height 0.05s ease-out, opacity 0.05s ease-out",
                 }}
               />
